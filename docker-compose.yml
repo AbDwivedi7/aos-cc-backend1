@@ -1,3 +1,4 @@
+# Update the existing docker-compose.yml in the root directory
 version: '3.8'
 
 services:
@@ -5,36 +6,92 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
       retries: 5
 
   node-api:
     build: ./node-api
     ports:
-      - "8080:8080"
-    environment:
-      - REDIS_ADDR=redis:6379
-      - PORT=8080
+      - "8081:8080"
     depends_on:
       redis:
         condition: service_healthy
-
-  # provisioning-service:
-  #   build: ./provisioning-service
-  #   environment:
-  #     - REDIS_ADDR=redis:6379
-  #     - NODE_API_URL=http://node-api:8080
-  #   depends_on:
-  #     - redis
-  #     - node-api
+    environment:
+      - REDIS_URL=redis:6379
 
   user-simulator:
     build: ./user-simulator
-    environment:
-      - REDIS_ADDR=redis:6379
     depends_on:
       redis:
         condition: service_healthy
+    environment:
+      - REDIS_URL=redis:6379
+
+  # YOUR SERVICE - This is what you're building
+  predictive-service:
+    build: ./predictive-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      node-api:
+        condition: service_started
+    environment:
+      - REDIS_URL=redis:6379
+      - NODE_API_URL=http://node-api:8080
+      - LOG_LEVEL=info
+      - PREDICTION_WINDOW_MINUTES=5
+      - CONNECT_THRESHOLD=0.7
+      - SCALE_UP_BUFFER=2
+      - IDLE_TIMEOUT_MINUTES=10
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+
+
+# version: '3.8'
+
+# services:
+#   redis:
+#     image: redis:7-alpine
+#     ports:
+#       - "6379:6379"
+#     healthcheck:
+#       test: ["CMD", "redis-cli", "ping"]
+#       interval: 5s
+#       timeout: 3s
+#       retries: 5
+
+#   node-api:
+#     build: ./node-api
+#     ports:
+#       - "8080:8080"
+#     environment:
+#       - REDIS_ADDR=redis:6379
+#       - PORT=8080
+#     depends_on:
+#       redis:
+#         condition: service_healthy
+
+#   # provisioning-service:
+#   #   build: ./provisioning-service
+#   #   environment:
+#   #     - REDIS_ADDR=redis:6379
+#   #     - NODE_API_URL=http://node-api:8080
+#   #   depends_on:
+#   #     - redis
+#   #     - node-api
+
+#   user-simulator:
+#     build: ./user-simulator
+#     environment:
+#       - REDIS_ADDR=redis:6379
+#     depends_on:
+#       redis:
+#         condition: service_healthy
